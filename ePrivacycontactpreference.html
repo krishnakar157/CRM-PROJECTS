@@ -1,0 +1,633 @@
+<!DOCTYPE html>
+<html lang="en" xmlns="http://www.w3.org/1999/xhtml">
+
+<head>
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.4.1/css/bootstrap.min.css">
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.4.1/jquery.min.js"></script>
+    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.4.1/js/bootstrap.min.js"></script>
+
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        .content {
+            max-width: 1200px;
+            margin: auto;
+            background: white;
+            padding: 10px;
+        }
+
+        .switch {
+            position: relative;
+            display: block;
+            vertical-align: top;
+            width: 100px;
+            height: 30px;
+            padding: 3px;
+            margin: 0 10px 10px 0;
+            background: linear-gradient(to bottom, #eeeeee, #FFFFFF 25px);
+            background-image: -webkit-linear-gradient(top, #eeeeee, #FFFFFF 25px);
+            border-radius: 18px;
+            box-shadow: inset 0 -1px white, inset 0 1px 1px rgba(0, 0, 0, 0.05);
+            cursor: pointer;
+            box-sizing: content-box;
+            float: right;
+        }
+
+        .switch-input {
+            position: absolute;
+            top: 0;
+            left: 0;
+            opacity: 0;
+            box-sizing: content-box;
+        }
+
+        .switch-label {
+            position: relative;
+            display: block;
+            height: inherit;
+            font-size: 10px;
+            text-transform: uppercase;
+            background: #eceeef;
+            border-radius: inherit;
+            box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.12), inset 0 0 2px rgba(0, 0, 0, 0.15);
+            box-sizing: content-box;
+        }
+
+        .switch-label:before,
+        .switch-label:after {
+            position: absolute;
+            top: 50%;
+            margin-top: -.5em;
+            line-height: 1;
+            -webkit-transition: inherit;
+            -moz-transition: inherit;
+            -o-transition: inherit;
+            transition: inherit;
+            box-sizing: content-box;
+        }
+
+        .switch-label:before {
+            content: attr(data-off);
+            right: 11px;
+            color: black;
+            font-size: 15px;
+            font-weight: bold;
+            text-shadow: 0 1px rgba(255, 255, 255, 0.5);
+        }
+
+        .switch-label:after {
+            content: attr(data-on);
+            left: 15px;
+            color: black;
+            font-size: 15px;
+            font-weight: bold;
+            text-shadow: 0 1px rgba(0, 0, 0, 0.2);
+            opacity: 0;
+        }
+
+        .switch-input:checked~.switch-label {
+            background: #9494b8;
+            box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.15), inset 0 0 3px rgba(0, 0, 0, 0.2);
+        }
+
+        .switch-input:checked~.switch-label:before {
+            opacity: 0;
+        }
+
+        .switch-input:checked~.switch-label:after {
+            opacity: 1;
+        }
+
+        .switch-handle {
+            position: absolute;
+            top: 4px;
+            left: 4px;
+            width: 28px;
+            height: 28px;
+            background: linear-gradient(to bottom, #FFFFFF 40%, #f0f0f0);
+            background-image: -webkit-linear-gradient(top, #FFFFFF 40%, #f0f0f0);
+            border-radius: 100%;
+            box-shadow: 1px 1px 5px rgba(0, 0, 0, 0.2);
+        }
+
+        .switch-handle:before {
+            content: "";
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            margin: -6px 0 0 -6px;
+            width: 12px;
+            height: 12px;
+            background: linear-gradient(to bottom, #eeeeee, #FFFFFF);
+            background-image: -webkit-linear-gradient(top, #eeeeee, #FFFFFF);
+            border-radius: 6px;
+            box-shadow: inset 0 1px rgba(0, 0, 0, 0.02);
+        }
+
+        .switch-input:checked~.switch-handle {
+            left: 74px;
+            box-shadow: -1px 1px 5px rgba(0, 0, 0, 0.2);
+        }
+
+
+        .switch-label,
+        .switch-handle {
+            transition: All 0.3s ease;
+            -webkit-transition: All 0.3s ease;
+            -moz-transition: All 0.3s ease;
+            -o-transition: All 0.3s ease;
+        }
+
+        .collapsible:after {
+            content: '\25BC';
+            color: black;
+            font-weight: bold;
+            float: right;
+            margin-left: 5px;
+        }
+
+        .active:after {
+            content: "\25B2";
+        }
+
+        h3 {
+            font-size: 40px;
+            color: black;
+            font-family: Arial;
+            text-align: left;
+        }
+
+        .dynamic-services-data {
+            margin-top: 1%;
+        }
+    </style>
+    <script>
+
+        /*
+            Function to bind/append selected channel's services in a div.
+            checkboxId: id of the checkbox.
+            divServicesId: id of the div in which channel's service will be binded.
+        */
+        function bindServiceOnChannelSelection(checkboxId, divServicesId) {
+            var functionName = "bindServiceOnChannelSelection";
+            try {
+                checkboxId = checkboxId.trim().replace(/\s/g, '');
+                var checkBox = document.getElementById("chk" + checkboxId);
+                var text = document.getElementById("dvDisplaySelectedService_" + divServicesId);
+                var selectedChannelServices = checkBox.getAttribute("data-servicesname");
+                var dynamicDiv = document.createElement('div'); // is a node
+                dynamicDiv.id = "dv_" + checkboxId;
+                dynamicDiv.innerHTML = selectedChannelServices;
+                dynamicDiv.className = 'dynamic-services-data';
+
+                if (checkBox.checked == true) {
+                    text.appendChild(dynamicDiv);
+                }
+                else {
+                    // Remove the appended channel services.
+                    $("#dv_" + checkboxId + "").remove();
+                }
+            } catch (e) {
+                console.log(`${functionName}: ${e.message || e.description}`);
+            }
+        }
+
+        /*
+            Function to save selected permissions in CRM.
+            userName: Name of the logged in user.
+            userId: Guid of the logged in user.
+        */
+        function savePermissionInteraction(userName, userId) {
+
+            var functionName = "savePermissionInteraction";
+            var isAtleastOneChannelChecked = false;
+            var interactionPermissionData = [];
+            var interactionPermissionDataObject = {};
+            var isToggleSwitchOn = false;
+            var executeSavePermissionProcess = true;
+            var questionNumber = 0;
+            var totalQuestionsUnanswered = "";
+            try {
+                // Iteration through all questions/permission texts
+                $('.contactPermissionTextKey').each(function (i, permissionElement) {
+                    questionNumber++;
+                    isAtleastOneChannelChecked = false;
+
+                    // Get the value of toggle switch. (true or false)
+                    isToggleSwitchOn = $(permissionElement).find("input[id^='chkToggle_']").is(":checked");
+
+                    // Iterate through each channels per question/permission text
+                    $(permissionElement).find("input[name^='grp_ct']").each(function (index, channelElement) {
+                        interactionPermissionDataObject = {};
+                        // Get the value of current iteration's channel.
+                        var isChannelChecked = $(channelElement).is(":checked");
+                        // Get all the services guids of the channel.
+                        var configurationIds = $(channelElement).attr("data-servicesid");
+                        // Split the guid in an array.
+                        var channelServiceId = configurationIds.split(',');
+                        // Iterate through each guid for the channel to create interaction permisison object which will be sent in CRM.
+                        for (let index = 0; index < channelServiceId.length; index++) {
+                            // Clear object
+                            interactionPermissionDataObject = {};
+                            // Get current interation service id.
+                            const serviceId = channelServiceId[index];
+                            // Validate the service id.
+                            if (serviceId != null && serviceId != "null" && serviceId != undefined && serviceId != "undefined" && serviceId != "" && !isEmptyOrSpaces(serviceId)) {
+                                // If channel is checked, push data in the object accordingly.
+                                if (isChannelChecked) {
+                                    // Set flag to true to avoid validation.
+                                    isAtleastOneChannelChecked = true;
+                                    interactionPermissionDataObject['configurationId'] = serviceId.trim().replace(/"/g, '\'');
+                                    interactionPermissionDataObject['preference'] = isToggleSwitchOn;
+                                }
+                                else {
+                                    interactionPermissionDataObject['configurationId'] = serviceId.trim().replace(/"/g, '\'');;
+                                    interactionPermissionDataObject['preference'] = false;
+                                }
+                                // Push the object data in an array which will be sent as a request to CRM.
+                                interactionPermissionData.push(interactionPermissionDataObject);
+                            }
+                        }
+                    });
+                    // If toggle button is selected, and no checkbox is checked, then throw error.
+                    if (isToggleSwitchOn && !isAtleastOneChannelChecked) {
+                        totalQuestionsUnanswered += questionNumber + ", ";
+                        // Set flag to stop proceeding for save.
+                        executeSavePermissionProcess = false;
+                        return;
+                    }
+                });
+                // If executeSavePermissionProcess is false, it means that one of the permission text toggle switch is ON, but channel has not been selected, so avoid saving the permission request.
+                if (!executeSavePermissionProcess) {
+                    alert(`Please select at least one channel for question no. ${totalQuestionsUnanswered} to save the record.`);
+                    return;
+                }
+                // Create request for Saving Permisison Request.
+                var saveInteractionPermissionRequestData = {
+                    BGID: userId,
+                    "UpdatedBy": userName,
+                    interactionPermissions: JSON.stringify(interactionPermissionData) // interactionPermissionData//
+                };
+
+                var bupa_action = "bupa_SaveInteractionPermissions";
+                //var bupa_parameter = JSON.stringify(saveInteractionPermissionRequestData);
+                var bupa_parameter = stringifyJsonObject(saveInteractionPermissionRequestData)
+                //bupa_parameter = bupa_parameter.replace(/\"([^(\")"]+)\":/g, "$1:");
+                //bupa_parameter = bupa_parameter.replace(/"/g, "\"");
+                bupa_parameter = bupa_parameter.replace(/"/g, "'");
+
+                console.log(`bupa_parameter: ${bupa_parameter}`);
+
+                // Validate parameter value, and call ajax request to invoke save permissiom request through plugin.
+                if (bupa_parameter != null) { // && bupa_parameter != "" && !isEmptyOrSpaces(bupa_parameter)
+                    var pageurl = "~/SavePermissionInteractionHistory?bupa_action=" + bupa_action + "&bupa_parameter=" + bupa_parameter; // encodeURIComponent(bupa_parameter); //
+                    $.ajax({
+                        type: "POST",
+                        contentType: 'application/json; charset=utf-8',
+                        dataType: "json",
+                        url: pageurl,
+                        beforeSend: function (XMLHttpRequest) {
+                            XMLHttpRequest.setRequestHeader('Accept', 'application/json');
+                        },
+                        async: false,
+                        success: function (data, textStatus, xhr) {
+                            alert('Success!');
+                        },
+                        error: function (xhr, textStatus, errorThrown) {
+                            alert(`${functionName}: Ajax Request Error - textStatus: ${textStatus}. errorThrown: ${errorThrown}`);
+                        }
+                    });
+                }
+            }
+            catch (e) {
+                console.log(`${functionName}: ${e.message || e.description}`);
+            }
+        }
+
+        /*
+            Function to expand/collapse the permission section.
+        */
+        function expandCollapsePermission(elementControl, collapseDivId) {
+            var functionName = "expandCollapsePermission";
+            try {
+                var upArrowClassName = "glyphicon glyphicon-chevron-up";
+                var downArrowClassName = "glyphicon glyphicon-chevron-down";
+
+                if ($(elementControl).hasClass(upArrowClassName)) {
+                    $(elementControl).removeClass(upArrowClassName).addClass(downArrowClassName);
+                    $(collapseDivId).removeClass('in');
+                }
+                else {
+                    $(elementControl).removeClass(downArrowClassName).addClass(upArrowClassName);
+                    $(collapseDivId).addClass('in');
+                }
+
+            } catch (e) {
+                console.log(`${functionName}: ${e.message || e.description}`);
+            }
+        }
+
+        /*
+            Function invoked on change of toggle switch
+        */
+        function onToggleSwitchChange(elementControl, dynamicControlId) {
+            var functionName = "onToggleSwitchChange";
+            var self = this;
+            try {
+                var channelGroupName = ".grp_" + dynamicControlId;
+                // If toggle is set as No (Toggle unchecked), then uncheck/unselect all the selected channels, and remove the appended services from div for that channel.
+                if (!$(elementControl).is(":checked")) {
+                    // Iterate through each channel
+                    $(channelGroupName).each(function () {
+                        if (this.checked) {
+                            // Set the channel checkbox state to false.
+                            this.checked = false;
+                            // Get the id of the channel checkbox.
+                            var channelCheckboxId = this.id;
+                            // Create id of channel's services' which is appended in a div. Slice is needed to remove the checkbox prefix i.e. chk
+                            var serviceAppendedDivId = "dv_" + channelCheckboxId.slice(3);
+                            // Remove the services div from UI.
+                            $("#" + serviceAppendedDivId).remove();
+                        }
+                    });
+                }
+            }
+            catch (e) {
+                console.log(`${functionName}: ${e.message || e.description}`);
+            }
+        }
+
+        /*
+            Function to validate whether string has whitespce or is empty.
+        */
+        function isEmptyOrSpaces(str) {
+            return str === null || str.match(/^ *$/) !== null;
+        }
+
+        function stringifyJsonObject(obj_from_json) {
+            if (typeof obj_from_json !== "object" || Array.isArray(obj_from_json)) {
+                // not an object, stringify using native function
+                return JSON.stringify(obj_from_json);
+            }
+            // Implements recursive object serialization according to JSON spec
+            // but without quotes around the keys.
+            let props = Object
+                .keys(obj_from_json)
+                .map(key => `${key}:${stringifyJsonObject(obj_from_json[key])}`)
+                .join(",");
+            return `{${props}}`;
+        }
+    </script>
+</head>
+
+<body>
+    <div class="content">
+        <table>
+            <tr>
+                <td>
+                    <div class="container">
+                        <div class="page-heading">
+                            {% include 'breadcrumbs' %}
+                        </div>
+                </td>
+            </tr>
+        </table>
+        <table>
+            <tr>
+                {% if user %}
+                <td>
+                    <h3>Contact Preferences for {{ user.fullname }}</h3>
+                </td>
+                {% else %}
+                <h3>Contact Preferences</h3>
+                {% endif %}
+            </tr>
+        </table>
+        <br />
+
+        {% assign query = request.params['action'] %}
+        {% assign parameters = request.params['parameters'] | replace: '"', '"' %}
+        {% assign attributes = request.params['attributes'] | replace: " ", "" | split: "," %}
+
+        {% fetchxml portalQuery %}
+        <fetch output-format="xml-platform" distinct="true" version="1.0" mapping="logical"
+            returntotalrecordcount="true">
+            <entity name="bupa_eprivacyportalaction">
+                <attribute name="bupa_eprivacyportalactionid" />
+                <attribute name="bupa_target" />
+                <attribute name="bupa_subtarget" />
+                <attribute name="statuscode" />
+                <attribute name="statecode" />
+                <attribute name="bupa_preference" />
+                <attribute name="bupa_permissiontext" />
+                <attribute name="bupa_order" />
+                <attribute name="bupa_needsupdate" />
+                <attribute name="bupa_historyid" />
+                <attribute name="bupa_configurationid" />
+                <attribute name="bupa_channel" />
+                <attribute name="bupa_answered" />
+                <attribute name="bupa_action" />
+                <filter type="and">
+                    <condition attribute="bupa_action" operator="eq" value="bupa_GetInteractionPermissions" />
+                    <condition attribute="bupa_parameters" operator="eq" value="{{user.Id}}" />
+                </filter>
+            </entity>
+        </fetch>
+        {% endfetchxml %}
+        <p>We are committed to protecting your privacy when dealing with your personal information.It also provides
+            information about your rights. For more details how we use, collect and protect your information see our <a
+                href="https://www.bupasalud.com/en/privacy-policy" target="_blank">Privacy policy</a></p>
+        <br /><br />
+        {% assign contactTypes = portalQuery.results.entities | group_by: "bupa_subtarget" %}
+
+        <div class="mainDiv" style="font-size:15px;color: black;">
+
+            {% assign contactTypeCounter = 1 %}
+            <!-- Start for Contact Types -->
+            {% for contactType in contactTypes %}
+
+
+            <div class="col-lg-12 col-md-12 col-sm-12 col-xs-12"
+                style="border-top: 1px solid #eee;border-bottom: 1px solid #eee;">
+                <!-- Div for displaying the contact-Type -->
+                <div id="contactTypeKey" style="margin-top:1%;border-style: initial;">
+
+                    <!--<span>Contact Type: {{contactType.key}}</span>-->
+                    {% assign contactPermissionTexts = contactType.items | group_by: "bupa_permissiontext" %}
+                    {% assign questionNumber = 1 %}
+
+                    {% capture contactTypeCounterInString %}{{contactTypeCounter}}{% endcapture %}
+                    {% capture questionNumberInString %}{{questionNumber}}{% endcapture %}
+
+
+                    <!-- Start for Permission Text -->
+                    {% for contactPermissionText in contactPermissionTexts %}
+                    {% assign isToggleSwitchChecked = '' %}
+                    <!-- Div for displaying the permissionText -->
+                    <div id="contactPermissionTextKey_ct{{contactTypeCounter}}_qn{{questionNumber}}"
+                        class="contactPermissionTextKey" style="margin-top:3%;">
+                        <div>
+                            <div class="col-lg-8 col-md-8 col-sm-8 col-xs-8" style="padding: 0;">
+                                <span id="spQues_ct{{contactTypeCounter}}_qn{{questionNumber}}"
+                                    style="font-size:17px">{{contactPermissionText.key}}</span>
+                            </div>
+
+
+                            <!--displaying the Toggle switch -->
+                            <div class="col-lg-3 col-md-3 col-sm-3 col-xs-3" style="padding: 0;"
+                                id="dvChkToggle_ct{{contactTypeCounter}}_qn{{questionNumber}}">
+                                <label class="switch" style="float:right">
+                                    <input class="switch-input" type="checkbox"
+                                        id="chkToggle_ct{{contactTypeCounter}}_qn{{questionNumber}}"
+                                        onclick="onToggleSwitchChange(this,'ct{{contactTypeCounter}}_qn{{questionNumber}}')" />
+                                    <span class="switch-label" data-on="Yes" data-off="No"></span>
+                                    <span class="switch-handle"></span>
+                                </label>
+                            </div>
+                            <div class="col-lg-1 col-md-1 col-sm-1 col-xs-1" style="padding: 0;">
+                                <!-- data-toggle="collapse"
+                                data-target="#dvCollapsable_ct{{contactTypeCounter}}_qn{{questionNumber}}" -->
+                                <span id="spArrowIcon_ct{{contactTypeCounter}}_qn{{questionNumber}}"
+                                    class="glyphicon glyphicon-chevron-down"
+                                    onclick="expandCollapsePermission(this, '#dvCollapsable_ct{{contactTypeCounter}}_qn{{questionNumber}}');"></span>
+                            </div>
+                        </div>
+
+                        <div class="clearfix"></div>
+
+                        <div class="collapse" id="dvCollapsable_ct{{contactTypeCounter}}_qn{{questionNumber}}">
+                            <div>
+                                Please contact me by:
+                            </div>
+                            <br />
+                            <div>
+                                {% assign contactChannels = contactPermissionText.items | group_by: "bupa_channel" %}
+
+                                {% assign selectedChannelServices = '' %}
+                                {% assign selectedChannelDivIds = '' %}
+
+                                <!--Start for Contact Channels (Ex. Emails, Letters, Telephone)-->
+                                {% for contactChannel in contactChannels %}
+                                {% assign isChannelChecked = '' %}
+                                {% assign servicesForChannel = '' %}
+                                {% assign configId = '' %}
+                                {% assign contactServices = contactChannel.items | group_by: "bupa_target" %}
+
+                                <!--Start for Contact Channel Services (Ex. Health Care, Dental etc.)-->
+                                {% for contactService in contactServices %}
+                                {% assign contactServicesKey = {{contactService.key}} %}
+                                {% assign contactConfigIds = {{contactService.items}} %}
+
+                                <!--Start for Contact Channel Service Configuration Id (Ex. Email -> Dental Guid, Email -> Health Care Guid)-->
+                                {% for contactConfigId in contactConfigIds %}
+
+                                {% if contactConfigId.bupa_preference == "true" %}
+                                {% assign isChannelChecked = 'checked' %}
+                                {% assign isToggleSwitchChecked = 'checked' %}
+                                {% endif %}
+
+                                <!-- To get the configuration ids of channel & services -->
+                                {% assign configId = configId  | append: contactConfigId.bupa_configurationid | append: ', ' | compact  %}
+                                {% endfor %}
+                                <!--endfor Contact Channel Service Configuration Id  -->
+                                {% assign servicesForChannel = servicesForChannel  | append: contactServicesKey | append: ', ' | compact  %}
+
+                                {% endfor %}
+                                <!--endfor Contact Channel Service  -->
+
+                                <!-- Div for displaying the answer checkboxes -->
+                                <!--Eg. Email, Telephone, Letter, SMS etc-->
+                                {% assign channelKeyWOSpace = contactChannel.key | remove: " " %}
+
+                                <label for="chk{{contactChannel.key}}_ct{{contactTypeCounter}}_qn{{questionNumber}}"
+                                    style="font-weight: 300;">
+                                    <input type="checkbox" {{isChannelChecked}}
+                                        data-servicesname="{{contactChannel.key}} - {{servicesForChannel}}"
+                                        data-servicesid="{{configId}}"
+                                        name="grp_ct{{contactTypeCounter}}_qn{{questionNumber}}"
+                                        class="grp_ct{{contactTypeCounter}}_qn{{questionNumber}}"
+                                        id="chk{{channelKeyWOSpace}}_ct{{contactTypeCounter}}_qn{{questionNumber}}"
+                                        value="{{contactChannel.key}}"
+                                        onclick="bindServiceOnChannelSelection('{{channelKeyWOSpace}}_ct{{contactTypeCounter}}_qn{{questionNumber}}','ct{{contactTypeCounter}}_qn{{questionNumber}}')" />
+                                    {{contactChannel.key}}
+                                </label>
+
+                                {% if isChannelChecked == 'checked' %}
+                                {% assign selectedChannelServices = selectedChannelServices | append: contactChannel.key | append:  ' - ' |  append: servicesForChannel | append: '~'   %}
+
+                                <!-- Create Ids for the div that will be appended for selected channel services -->
+                                {% assign selectedChannelDivIds = selectedChannelDivIds | append : 'dv_' | append: channelKeyWOSpace | append: '_ct' | append: contactTypeCounterInString | append: '_qn' | append: questionNumberInString | append: '~'  %}
+
+                                {% endif %}
+
+                                &nbsp;&nbsp;&nbsp;
+
+                                {% endfor %}
+                                <!--endfor Contact Channels  -->
+
+                                {% if isToggleSwitchChecked == 'checked' %}
+                                <script>
+                                    $('#chkToggle_ct{{contactTypeCounter}}_qn{{questionNumber}}').attr('checked', true);
+                                    $('#dvCollapsable_ct{{contactTypeCounter}}_qn{{questionNumber}}').addClass('in');
+                                    $('#spArrowIcon_ct{{contactTypeCounter}}_qn{{questionNumber}}').removeClass('glyphicon-chevron-down').addClass('glyphicon-chevron-up');
+                                </script>
+                                {% endif %}
+
+                                <!-- Div for displaying services of selected answer.  -->
+                                <div id="dvDisplaySelectedService_ct{{contactTypeCounter}}_qn{{questionNumber}}">
+
+                                    {% if selectedChannelServices != blank %}
+                                    {% assign selectedChannelServices =  selectedChannelServices | split: '~' %}
+                                    {% assign selectedChannelDivIds = selectedChannelDivIds | split: '~' %}
+                                    {% assign dynamicDivIdCounter = 0 %}
+                                    <!-- Start for Selected Contact Channels Bind -->
+                                    {% for selectedChannelService in selectedChannelServices %}
+
+                                    <div class='dynamic-services-data'
+                                        id="{{selectedChannelDivIds[dynamicDivIdCounter]}}">
+                                        {{ selectedChannelService }}
+                                    </div>
+
+                                    {% assign dynamicDivIdCounter = dynamicDivIdCounter | plus: 1 %}
+                                    {% endfor %}
+                                    <!-- end for Selected Contact Channels Bind -->
+
+                                    {% endif %}
+
+                                </div>
+
+                            </div>
+                        </div>
+                    </div>
+                    {% assign questionNumber = questionNumber | plus: 1 %}
+                    {% endfor %}
+                    <!--endfor Permission Text -->
+                    <br />
+                </div>
+
+            </div>
+            <div class="clearfix"></div>
+            <br /><br />
+
+            {% assign contactTypeCounter = contactTypeCounter | plus: 1 %}
+            {% endfor %}
+            <!--End for Contact Types -->
+        </div>
+
+        <div class="clearfix"></div>
+
+        <div class="footer" align="center">
+            <button type="button" class="btn btn-primary"
+                onclick="savePermissionInteraction('{{ user.fullname }}','{{ user.id }}');">Save
+                Permissions</button>
+        </div>
+        <br />
+        <p>We are committed to protecting your privacy when dealing with your personal
+            information.It also provides
+            information about your rights. For more details how we use, collect and protect your
+            information see our <a href="https://www.bupasalud.com/en/privacy-policy">Privacy
+                policy</a></p>
+    </div>
+</body>
+
+</html>
