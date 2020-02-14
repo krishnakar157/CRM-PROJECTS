@@ -1,0 +1,172 @@
+using Bupa.Crm.Framework.Common.Logger;
+using Microsoft.Crm.Sdk.Messages;
+using Microsoft.Xrm.Sdk;
+using Microsoft.Xrm.Sdk.Query;
+using Microsoft.Xrm.Sdk.Workflow;
+using System;
+using System.Activities;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace Bupa.Crm.Plugin.Shared.BulkDeleteAction
+{
+    public class GetNextGDPRRecordToProcess : CodeActivity
+    {
+        #region Input Properties
+
+        [Input("CurrentGDPRRecord")]
+        [RequiredArgument]
+        [ReferenceTarget("bupa_gdprsettings") ]
+        public InArgument<EntityReference> CurrentGDPRRecord { get; set; }
+
+        [Output("NextGDPRRecord")]        
+        [ReferenceTarget("bupa_gdprsettings")]
+        public OutArgument<EntityReference> NextGDPRRecord { get; set; }
+
+        #endregion
+
+        protected override void Execute(CodeActivityContext context)
+        {
+            try
+            {
+                IWorkflowContext workflowContext = context.GetExtension<IWorkflowContext>();
+                IOrganizationServiceFactory serviceFactory = context.GetExtension<IOrganizationServiceFactory>();
+                IOrganizationService service = serviceFactory.CreateOrganizationService(workflowContext.UserId);
+                ITracingService tracer = context.GetExtension<ITracingService>();
+
+                if (service == null)
+                    throw new InvalidPluginExecutionException(string.Format("{0}: Service not set.", "GetNextGDPRRecordToProcess"));
+
+                tracer.Trace("Inside GetNextGDPRRecordToProcess workflow");
+
+                //*********************** Get Value of Input paramter ************************
+                EntityReference currentGDPRRecord = CurrentGDPRRecord.Get<EntityReference>(context);
+
+                //*********************** Get GDPR Record Based Execution Order ************************
+                List<GdprDM> gdprList = GetListOfGDPRRecordsOrderByExecutionOrder(service, tracer);
+                tracer.Trace("GDPR List count: {0}", gdprList.Count);
+
+                if (gdprList != null && gdprList.Count > 0)
+                {
+                    //get current GDPR record from retrieved list
+                    GdprDM currentGdpr = gdprList.Where(g => g.recordId == currentGDPRRecord.Id.ToString()).FirstOrDefault();
+                   
+                    if (currentGdpr!=null)
+                    {
+                        tracer.Trace("currentGdpr.ExecutionOrder: {0}", currentGdpr.ExecutionOrder);
+                        int nextExecutionOrder = currentGdpr.ExecutionOrder + 1;
+                        tracer.Trace("nextExecutionOrder: {0}", nextExecutionOrder);
+                        GdprDM nextGdpr = gdprList.Where(g => g.ExecutionOrder == nextExecutionOrder).FirstOrDefault();
+
+                        tracer.Trace("gdprList[1].ExecutionOrder: {0}", gdprList[1].ExecutionOrder);
+
+                        if (nextGdpr !=null)
+                        {
+                            tracer.Trace("nextGdpr.recordId: {0}", nextGdpr.recordId);
+                            NextGDPRRecord.Set(context, new EntityReference(nextGdpr.entityName,new Guid(nextGdpr.recordId)));
+                        }
+                    }
+                }
+            }
+            catch (InvalidPluginExecutionException ex)
+            {
+                throw new InvalidPluginExecutionException(ex.Message);
+            }
+        }
+
+     
+        /// <summary>
+        /// get the list of GDPR records order by execution order and execution order contain data
+        /// </summary>
+        public List<GdprDM> GetListOfGDPRRecordsOrderByExecutionOrder(IOrganizationService service, ITracingService tracer)
+        {
+            List<GdprDM> gdprList = null;
+
+            try
+            {
+
+                tracer.Trace("Inside GetListOfGDPRRecordsOrderByExecutionOrder method of GDPRExecuteSequenceWF workflow");
+
+                string fetchxml = @"<fetch version='1.0' output-format='xml-platform' mapping='logical' distinct='false'>
+                                  <entity name='bupa_gdprsettings'>
+                                    <attribute name='bupa_gdprsettingsid' />
+                                    <attribute name='bupa_executionorder' />
+                                    <attribute name='bupa_entityname' />
+                                    <attribute name='bupa_deletebatchsize' />
+                                    <order attribute='bupa_executionorder' descending='false' />
+                                    <filter type='and'>
+                                      <condition attribute='bupa_executionorder' operator='not-null' />
+                                    </filter>
+                                  </entity>
+                                </fetch>";
+
+                fetchxml = string.Format(fetchxml);
+
+                EntityCollection gdprColl = service.RetrieveMultiple(new FetchExpression(fetchxml));
+
+                tracer.Trace("gdprColl.Entities.Count" + gdprColl.Entities.Count);
+
+                if (gdprColl.Entities.Count > 0)
+                {
+
+                    gdprList = new List<GdprDM>();
+
+                    foreach (Entity En in gdprColl.Entities)
+                    {
+
+                        GdprDM gdprDM = new GdprDM();
+
+                        gdprDM.recordId = En.Id.ToString();
+
+                        if (En.Contains("bupa_entityname"))
+                            gdprDM.entityName = (string)En["bupa_entityname"];
+
+
+
+                        if (En.Contains("bupa_deletebatchsize"))
+                            gdprDM.deleteBatchSize = (int)En["bupa_deletebatchsize"];
+
+                        if (En.Contains("bupa_executionorder"))
+                            gdprDM.ExecutionOrder = (int)En["bupa_executionorder"];
+
+                        gdprList.Add(gdprDM);
+
+
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                //Create error Using Logger framework
+                Logger logError = new Logger(service);
+
+                string errorMessage = "Inside GDPRExecuteSequenceWF Workflow : " + "Error whille getting the record from GDPR";
+                string errorDetails = "inside GetListOfGDPRRecordsOrderByExecutionOrder Method" + " : " + ex.Message;
+
+                errorDetails += Environment.NewLine;
+
+                if (ex.StackTrace != null)
+                {
+                    errorDetails = errorDetails + ex.StackTrace;
+                }
+
+                logError.WriteLog(errorMessage, errorDetails, "GDPR", LogLevel.Error);
+            }
+            return gdprList;
+
+        }
+
+        public class GdprDM
+        {
+            public string entityName { get; set; } //bupa_entityname
+            public string recordId { get; set; } //bupa_gdprsettingsid
+            public int deleteBatchSize { get; set; } //bupa_deletebatchsize
+            public int totalDeletedRecord { get; set; } // bupa_totaldeletedrecords
+            public DateTime scheduleDate { get; set; } // bupa_scheduleddate
+
+            public Int32 ExecutionOrder { get; set; } //bupa_entityname
+        }
+    }
+}

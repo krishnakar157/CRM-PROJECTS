@@ -1,0 +1,553 @@
+using Bupa.Crm.Plugin.Shared.BulkDeleteAction;
+using Microsoft.VisualStudio.TestTools.UnitTesting;
+using Microsoft.Xrm.Sdk;
+using Microsoft.Xrm.Sdk.Query;
+using Rhino.Mocks;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace Bupa.Crm.Plugin.Shared.BulkDeleteAction
+{
+    [TestClass]
+    public class BulkDeleteUnitTests
+    {
+        #region Member Variables
+
+        private BulkDelete _bulkDeletePlugin;
+        ITracingService _tracingService;
+        IOrganizationService _orgService;
+        IOrganizationServiceFactory _serviceFactory;
+        IServiceProvider _serviceProvider;
+        IPluginExecutionContext _context;
+
+
+        #endregion
+
+        #region Member Constants
+
+        internal const string DeleteBatchSizeInputParameter = "DeleteBatchSize";
+        internal const string RecordIdInputParameter = "RecordId";
+        internal const string ScheduleDaysInputParameter = "ScheduleDays";
+        internal const string EntNameInputParameter = "EntName";
+        internal const string TotalDeletedRecordsOutputParameter = "TotalDeletedRecords";
+        internal const string actionName = "bupa_BulkRecordDelete";
+
+        internal const string fetchCondition = " fetch version='1.0' output-format='xml-platform' mapping='logical' distinct='true'"
+                                      + "entity name = 'account' "
+                                        + " attribute name='name' /"
+                                        + "attribute name = 'accountid' /"
+                                        + " order attribute='name' descending='false' /"
+                                        + "link-entity name = 'lead' from='parentaccountid' to='accountid' alias='be'"
+                                          + "filter type = 'and' "
+                                            + " condition attribute='leadid' operator='in' "
+                                                        + "[KEY_PLACEHOLDER_PARENTIDS]"
+                                                    + "/condition"
+                                          + "/filter"
+                                        + "/link-entity"
+                                      + "/entity"
+                                    + "/fetch";
+
+        internal const string fetchConditionToExclude = "<fetch version='1.0' output-format='xml-platform' mapping='logical' distinct='true' >"+
+                                                    "<entity name='account' >"+
+                                                        "<attribute name='name' />"+
+                                                        "<attribute name='accountid' />"+
+                                                        "<order attribute='name' descending='false' />"+
+                                                        "<link-entity name='lead' from='parentaccountid' to='accountid' alias='ad' >"+
+                                                            "<filter type='and' >"+
+                                                                "<condition attribute='leadid' operator='in' >"+
+                                                                    "[KEY_PLACEHOLDER_PARENTIDS]"+
+                                                                "</condition>"+
+                                                            "</filter>"+
+                                                        "</link-entity>"+
+                                                        "<link-entity name='incident' from='customerid' to='accountid' link-type='outer' />"+
+                                                        "<link-entity name='quote' from='customerid' to='accountid' alias='ap' link-type='outer' />"+
+                                                        "<link-entity name='contract' from='customerid' to='accountid' alias='ar' link-type='outer' />"+
+                                                        "<filter type='and' >"+
+                                                            "<filter type='or' >"+
+                                                                "<condition entityname='incident' attribute='customerid' operator='not-null' />"+
+                                                                "<condition entityname='quote' attribute='quoteid' operator='not-null' />"+
+                                                                "<condition entityname='contract' attribute='customerid' operator='not-null' />"+
+                                                            "</filter>"+
+                                                        "</filter>"+
+                                                    "</entity>"+
+                                                "</fetch>";
+
+        #endregion
+
+        #region Positive Unit Test Case
+
+        /// <summary>
+        /// Execute Plugin with all success parameters
+        /// Delete Product Holding
+        /// </summary>
+        [TestMethod]
+        public void BulkDelete_ExecuteSuccess_Delete_ProductHolding()
+        {
+            SetUpContextVariables();
+            ExpectMockedServiceProvider(_serviceProvider);
+            ExpectPluginContextVariable("10000", Guid.NewGuid().ToString(), "1", "bupa_contactcontract");
+            ExpectMock(GetEntityCollection(GetGDPREntity(EntNameInputParameter, "2010-04-11")), GetGDPREntity(EntNameInputParameter, "2010-04-11"));
+
+            _bulkDeletePlugin.Execute(_serviceProvider);
+        }
+
+        /// <summary>
+        /// If no Product Holding records found older than 7 years
+        /// Do not delete
+        /// </summary>
+        [TestMethod]
+        public void BulkDelete_ExecuteSuccess_DoNotDelete_ProductHolding()
+        {
+            SetUpContextVariables();
+            ExpectMockedServiceProvider(_serviceProvider);
+            ExpectPluginContextVariable("10000", Guid.NewGuid().ToString(), "1", "bupa_contactcontract");
+            ExpectMock(GetEntityCollection(GetGDPREntity(EntNameInputParameter, "2018-04-11")), GetGDPREntity(EntNameInputParameter, "2018-04-11"));
+            _bulkDeletePlugin.Execute(_serviceProvider);
+        }
+
+
+        /// <summary>
+        /// Execute Plugin with all success parameters
+        /// Processing entities other than Product Holding
+        /// </summary>
+        [TestMethod]
+        public void BulkDelete_ExecuteSuccess_Delete_OtherThanProductHolding()
+        {
+            SetUpContextVariables();
+            ExpectMockedServiceProvider(_serviceProvider);
+            ExpectPluginContextVariable("10000", Guid.NewGuid().ToString(), "1", "contact");            
+
+            _orgService.Stub(x => x.Retrieve(string.Empty, Guid.NewGuid(), new ColumnSet())).IgnoreArguments().Return(GetGDPREntity(EntNameInputParameter, "2010-04-11"));
+
+            EntityCollection entitiesToInclude = GetEntityCollection(GetEntity("contact"));
+            EntityCollection entitiesToExclude = GetEntityCollection(GetEntity("contact"));
+
+            _orgService.Stub(x => x.RetrieveMultiple(new QueryExpression())).IgnoreArguments().Return(entitiesToInclude).Repeat.Once();
+            _orgService.Stub(x => x.RetrieveMultiple(new QueryExpression())).IgnoreArguments().Return(entitiesToExclude).Repeat.Once();
+            _orgService.Stub(x => x.RetrieveMultiple(new QueryExpression())).IgnoreArguments().Return(GetEntityCollection(GetGDPREntity("bupa_gdprsettings", "2010-04-11", fetchCondition, fetchConditionToExclude, 200))).Repeat.Once();
+            _orgService.Stub(x => x.RetrieveMultiple(new QueryExpression())).IgnoreArguments().Return(GetEntityCollection(GetEntity("contact"))).Repeat.Twice();
+
+            _bulkDeletePlugin.Execute(_serviceProvider);
+        }
+
+        /// <summary>
+        /// Execute Plugin with all success parameters
+        /// Processing Preauth
+        /// </summary>
+        [TestMethod]
+        public void BulkDelete_ExecuteSuccess_Delete_Preauth()
+        {
+            SetUpContextVariables();
+            ExpectMockedServiceProvider(_serviceProvider);
+            ExpectPluginContextVariable("10000", Guid.NewGuid().ToString(), "1", "bupa_preauth");
+            //ExpectMock(GetEntityCollection(GetEntity(EntNameInputParameter, "2010-04-11")), GetEntity(EntNameInputParameter, "2010-04-11"));
+
+            _orgService.Stub(x => x.Retrieve(string.Empty, Guid.NewGuid(), new ColumnSet())).IgnoreArguments().Return(GetGDPREntity(EntNameInputParameter, "2010-04-11"));
+
+            EntityCollection entitiesToInclude = GetEntityCollection(GetEntity("bupa_preauth"));
+            EntityCollection entitiesToExclude = GetEntityCollection(GetEntity("bupa_preauth"));
+
+            _orgService.Stub(x => x.RetrieveMultiple(new QueryExpression())).IgnoreArguments().Return(entitiesToInclude).Repeat.Once();
+            _orgService.Stub(x => x.RetrieveMultiple(new QueryExpression())).IgnoreArguments().Return(entitiesToExclude).Repeat.Once();
+            _orgService.Stub(x => x.RetrieveMultiple(new QueryExpression())).IgnoreArguments().Return(GetEntityCollection(GetGDPREntity("bupa_gdprsettings", "2010-04-11", fetchCondition, fetchConditionToExclude, 200))).Repeat.Once();
+            _orgService.Stub(x => x.RetrieveMultiple(new QueryExpression())).IgnoreArguments().Return(GetEntityCollection(GetEntity("bupa_preauth"))).Repeat.Twice();
+
+            _bulkDeletePlugin.Execute(_serviceProvider);
+        }
+
+
+        /// <summary>
+        /// Execute Plugin with all success parameters
+        /// Processing Complaints
+        /// </summary>
+        [TestMethod]
+        public void BulkDelete_ExecuteSuccess_Delete_Complaints()
+        {
+            SetUpContextVariables();
+            ExpectMockedServiceProvider(_serviceProvider);
+            ExpectPluginContextVariable("10000", Guid.NewGuid().ToString(), "1", "incident");
+            //ExpectMock(GetEntityCollection(GetEntity(EntNameInputParameter, "2010-04-11")), GetEntity(EntNameInputParameter, "2010-04-11"));
+
+            _orgService.Stub(x => x.Retrieve(string.Empty, Guid.NewGuid(), new ColumnSet())).IgnoreArguments().Return(GetGDPREntity(EntNameInputParameter, "2010-04-11"));
+
+            EntityCollection entitiesToInclude = GetEntityCollection(GetEntity("incident"));
+            EntityCollection entitiesToExclude = GetEntityCollection(GetEntity("incident"));
+
+            _orgService.Stub(x => x.RetrieveMultiple(new QueryExpression())).IgnoreArguments().Return(entitiesToInclude).Repeat.Once();
+            _orgService.Stub(x => x.RetrieveMultiple(new QueryExpression())).IgnoreArguments().Return(entitiesToExclude).Repeat.Once();
+            _orgService.Stub(x => x.RetrieveMultiple(new QueryExpression())).IgnoreArguments().Return(GetEntityCollection(GetGDPREntity("bupa_gdprsettings", "2010-04-11", fetchCondition, fetchConditionToExclude, 200))).Repeat.Once();
+            _orgService.Stub(x => x.RetrieveMultiple(new QueryExpression())).IgnoreArguments().Return(GetEntityCollection(GetEntity("incident"))).Repeat.Once();
+            _orgService.Stub(x => x.RetrieveMultiple(new QueryExpression())).IgnoreArguments().Return(GetEntityCollection(GetEntity("incident"))).Repeat.Once();
+
+            _bulkDeletePlugin.Execute(_serviceProvider);
+        }
+
+        /// <summary>
+        /// Execute Plugin with all success parameters
+        /// Processing only entitiesToInclude for deletion
+        /// </summary>
+        [TestMethod]
+        public void BulkDelete_ExecuteSuccess_Delete_EntitiesToInclude()
+        {
+            SetUpContextVariables();
+            ExpectMockedServiceProvider(_serviceProvider);
+            ExpectPluginContextVariable("10000", Guid.NewGuid().ToString(), "1", "contact");
+            //ExpectMock(GetEntityCollection(GetEntity(EntNameInputParameter, "2010-04-11")), GetEntity(EntNameInputParameter, "2010-04-11"));
+
+            _orgService.Stub(x => x.Retrieve(string.Empty, Guid.NewGuid(), new ColumnSet())).IgnoreArguments().Return(GetGDPREntity(EntNameInputParameter, "2010-04-11"));
+
+            EntityCollection entitiesToInclude = GetEntityCollection(GetEntity("contact"));
+            EntityCollection entitiesToExclude = new EntityCollection();
+
+            _orgService.Stub(x => x.RetrieveMultiple(new QueryExpression())).IgnoreArguments().Return(entitiesToInclude).Repeat.Once();
+            _orgService.Stub(x => x.RetrieveMultiple(new QueryExpression())).IgnoreArguments().Return(entitiesToExclude).Repeat.Once();
+            _orgService.Stub(x => x.RetrieveMultiple(new QueryExpression())).IgnoreArguments().Return(GetEntityCollection(GetGDPREntity("bupa_gdprsettings", "2010-04-11", fetchCondition, fetchConditionToExclude, 200))).Repeat.Once();
+            _orgService.Stub(x => x.RetrieveMultiple(new QueryExpression())).IgnoreArguments().Return(GetEntityCollection(GetEntity("incident"))).Repeat.Once();
+            _orgService.Stub(x => x.RetrieveMultiple(new QueryExpression())).IgnoreArguments().Return(GetEntityCollection(GetEntity("incident"))).Repeat.Once();
+
+            _bulkDeletePlugin.Execute(_serviceProvider);
+        }
+
+        /// <summary>
+        /// Execute Plugin with all success parameters
+        /// Processing only entitiesToExclude for deletion
+        /// </summary>
+        [TestMethod]
+        public void BulkDelete_ExecuteSuccess_Delete_EntitiesToExclude()
+        {
+            SetUpContextVariables();
+            ExpectMockedServiceProvider(_serviceProvider);
+            ExpectPluginContextVariable("10000", Guid.NewGuid().ToString(), "1", "contact");
+            //ExpectMock(GetEntityCollection(GetEntity(EntNameInputParameter, "2010-04-11")), GetEntity(EntNameInputParameter, "2010-04-11"));
+
+            _orgService.Stub(x => x.Retrieve(string.Empty, Guid.NewGuid(), new ColumnSet())).IgnoreArguments().Return(GetGDPREntity(EntNameInputParameter, "2010-04-11"));
+
+            EntityCollection entitiesToInclude = new EntityCollection();
+            EntityCollection entitiesToExclude = GetEntityCollection(GetEntity("contact")); 
+
+            _orgService.Stub(x => x.RetrieveMultiple(new QueryExpression())).IgnoreArguments().Return(entitiesToInclude).Repeat.Once();
+            _orgService.Stub(x => x.RetrieveMultiple(new QueryExpression())).IgnoreArguments().Return(entitiesToExclude).Repeat.Once();
+            _orgService.Stub(x => x.RetrieveMultiple(new QueryExpression())).IgnoreArguments().Return(GetEntityCollection(GetGDPREntity("bupa_gdprsettings", "2010-04-11", fetchCondition, fetchConditionToExclude, 200))).Repeat.Once();
+            _orgService.Stub(x => x.RetrieveMultiple(new QueryExpression())).IgnoreArguments().Return(GetEntityCollection(GetEntity("incident"))).Repeat.Once();
+            _orgService.Stub(x => x.RetrieveMultiple(new QueryExpression())).IgnoreArguments().Return(GetEntityCollection(GetEntity("incident"))).Repeat.Once();
+
+            _bulkDeletePlugin.Execute(_serviceProvider);
+        }
+
+        /// <summary>
+        /// Execute Plugin with all success parameters
+        /// Processing No entitiesToExclude and entitiesToInclude for deletion
+        /// </summary>
+        [TestMethod]
+        public void BulkDelete_ExecuteSuccess_DeleteNoEntities()
+        {
+            SetUpContextVariables();
+            ExpectMockedServiceProvider(_serviceProvider);
+            ExpectPluginContextVariable("10000", Guid.NewGuid().ToString(), "1", "contact");
+            //ExpectMock(GetEntityCollection(GetEntity(EntNameInputParameter, "2010-04-11")), GetEntity(EntNameInputParameter, "2010-04-11"));
+
+            _orgService.Stub(x => x.Retrieve(string.Empty, Guid.NewGuid(), new ColumnSet())).IgnoreArguments().Return(GetGDPREntity(EntNameInputParameter, "2010-04-11"));
+
+            EntityCollection entitiesToInclude = new EntityCollection();
+            EntityCollection entitiesToExclude = new EntityCollection();
+
+            _orgService.Stub(x => x.RetrieveMultiple(new QueryExpression())).IgnoreArguments().Return(entitiesToInclude).Repeat.Once();
+            _orgService.Stub(x => x.RetrieveMultiple(new QueryExpression())).IgnoreArguments().Return(entitiesToExclude).Repeat.Once();
+            _orgService.Stub(x => x.RetrieveMultiple(new QueryExpression())).IgnoreArguments().Return(GetEntityCollection(GetGDPREntity("bupa_gdprsettings", "2010-04-11", fetchCondition, fetchConditionToExclude, 200))).Repeat.Once();
+          
+            _bulkDeletePlugin.Execute(_serviceProvider);
+        }
+
+        /// <summary>
+        /// Pass IncludeFetchXml paramter empty
+        /// </summary>
+        [TestMethod]
+        public void BulkDelete_IncludeFetchXmlEmpty()
+        {
+            SetUpContextVariables();
+            ExpectMockedServiceProvider(_serviceProvider);
+            ExpectPluginContextVariable("10000", Guid.NewGuid().ToString(), "1", "contact");            
+
+            //GDPR Entity record for Context entity
+            _orgService.Stub(x => x.Retrieve(string.Empty, Guid.NewGuid(), new ColumnSet())).IgnoreArguments().Return(GetGDPREntity(EntNameInputParameter, "2010-04-11", string.Empty));
+            
+            _bulkDeletePlugin.Execute(_serviceProvider);
+        }
+
+        /// <summary>
+        /// Pass ExcludeFetchXml paramter empty
+        /// </summary>
+        [TestMethod]
+        public void BulkDelete_ExcludeFetchXmlEmpty()
+        {
+            SetUpContextVariables();
+            ExpectMockedServiceProvider(_serviceProvider);
+            ExpectPluginContextVariable("10000", Guid.NewGuid().ToString(), "1", "contact");
+
+            //GDPR Entity record for Context entity
+            _orgService.Stub(x => x.Retrieve(string.Empty, Guid.NewGuid(), new ColumnSet())).IgnoreArguments().Return(GetGDPREntity(EntNameInputParameter, "2010-04-11", fetchCondition, string.Empty));
+
+            EntityCollection entitiesToInclude = GetEntityCollection(GetEntity("contact"));
+            _orgService.Stub(x => x.RetrieveMultiple(new QueryExpression())).IgnoreArguments().Return(entitiesToInclude).Repeat.Once();
+
+            _bulkDeletePlugin.Execute(_serviceProvider);
+        }
+
+        #endregion
+
+
+        #region Negative Test cases
+
+        /// <summary>
+        /// Throw exception on Delete of Product Holding
+        /// </summary>
+        [TestMethod]
+        public void BulkDelete_Exception_OnProductHoldingDeletion()
+        {
+            SetUpContextVariables();
+            ExpectMockedServiceProvider(_serviceProvider);
+            ExpectPluginContextVariable("10000", Guid.NewGuid().ToString(), "1", "bupa_contactcontract");
+            ExpectMock(GetEntityCollection(GetGDPREntity(EntNameInputParameter, "2010-04-11")), GetGDPREntity(EntNameInputParameter, "2010-04-11"));
+
+            _orgService.Stub(x => x.Delete(string.Empty, Guid.NewGuid())).IgnoreArguments().Throw(new Exception("Throw exception on Delete"));
+            
+            _bulkDeletePlugin.Execute(_serviceProvider);
+        }
+
+        /// <summary>
+        /// Throw exception on Retrieving Contract against Product Holding
+        /// </summary>
+        [TestMethod]
+        public void BulkDelete_Exception_ProductHolding_RetrieveMultiple()
+        {
+            SetUpContextVariables();
+            ExpectMockedServiceProvider(_serviceProvider);
+            ExpectPluginContextVariable("10000", Guid.NewGuid().ToString(), "1", "bupa_contactcontract");
+            _orgService.Stub(x => x.Retrieve(string.Empty, Guid.NewGuid(), new ColumnSet())).IgnoreArguments().Return(GetGDPREntity(EntNameInputParameter, "2010-04-11"));
+            
+            _orgService.Stub(x => x.RetrieveMultiple(null)).IgnoreArguments().Throw(new Exception("Throw exception on Retrieving Contract against Product Holding"));
+
+            _bulkDeletePlugin.Execute(_serviceProvider);
+        }
+
+        /// <summary>
+        /// Throw exception on Retrieving GDPR Setting entity
+        /// </summary>
+        [TestMethod]
+        [ExpectedException(typeof(InvalidPluginExecutionException))]
+        public void BulkDelete_Exception_OnRetrieveOfGDPRSettingEntity()
+        {
+            SetUpContextVariables();
+            ExpectMockedServiceProvider(_serviceProvider);
+            ExpectPluginContextVariable("10000", Guid.NewGuid().ToString(), "1", "bupa_contactcontract");          
+
+            _orgService.Stub(x => x.Retrieve(string.Empty, Guid.Empty, null)).IgnoreArguments().Throw(new Exception("Throw exception on Retrieving GDPR Setting entity"));
+
+            _bulkDeletePlugin.Execute(_serviceProvider);
+        }
+
+        /// <summary>
+        /// Throw exception on Retrieving entitiesToInclude and linked entities or related entities
+        /// Method - GetEntityCollectionbyFetchXMLField()
+        /// </summary>
+        [TestMethod]
+        public void BulkDelete_Exception_OnRetrieveOfEntitiesToInclude()
+        {
+            SetUpContextVariables();
+            ExpectMockedServiceProvider(_serviceProvider);
+            ExpectPluginContextVariable("10000", Guid.NewGuid().ToString(), "1", "bupa_preauth");
+            //ExpectMock(GetEntityCollection(GetEntity(EntNameInputParameter, "2010-04-11")), GetEntity(EntNameInputParameter, "2010-04-11"));
+
+            _orgService.Stub(x => x.Retrieve(string.Empty, Guid.NewGuid(), new ColumnSet())).IgnoreArguments().Return(GetGDPREntity(EntNameInputParameter, "2010-04-11"));
+
+            EntityCollection entitiesToExclude = GetEntityCollection(GetEntity("bupa_preauth"));
+
+            _orgService.Stub(x => x.RetrieveMultiple(new QueryExpression())).IgnoreArguments().Throw(new Exception("Throw Exception while retrieving Entities to Include")).Repeat.Once();
+            _orgService.Stub(x => x.RetrieveMultiple(new QueryExpression())).IgnoreArguments().Return(entitiesToExclude).Repeat.Once();
+                        
+            _orgService.Stub(x => x.RetrieveMultiple(new QueryExpression())).IgnoreArguments().Return(GetEntityCollection(GetGDPREntity("bupa_gdprsettings", "2010-04-11", fetchCondition, fetchConditionToExclude, 200))).Repeat.Once();
+
+            //Linked Entity
+            _orgService.Stub(x => x.RetrieveMultiple(new QueryExpression())).IgnoreArguments().Throw(new Exception("Throw exception while retrieving related child entities")).Repeat.Twice();
+
+            _bulkDeletePlugin.Execute(_serviceProvider);
+        }
+
+        /// <summary>
+        /// Throw exception on Delete of any entity other than Product Holding
+        /// </summary>
+        [TestMethod]
+        public void BulkDelete_Exception_OnAnyEntityDeletion()
+        {
+            SetUpContextVariables();
+            ExpectMockedServiceProvider(_serviceProvider);
+            ExpectPluginContextVariable("10000", Guid.NewGuid().ToString(), "1", "incident");
+           
+            _orgService.Stub(x => x.Retrieve(string.Empty, Guid.NewGuid(), new ColumnSet())).IgnoreArguments().Return(GetGDPREntity(EntNameInputParameter, "2010-04-11"));
+
+            EntityCollection entitiesToInclude = GetEntityCollection(GetEntity("incident"));
+            EntityCollection entitiesToExclude = GetEntityCollection(GetEntity("incident"));
+
+            _orgService.Stub(x => x.RetrieveMultiple(new QueryExpression())).IgnoreArguments().Return(entitiesToInclude).Repeat.Once();
+            _orgService.Stub(x => x.RetrieveMultiple(new QueryExpression())).IgnoreArguments().Return(entitiesToExclude).Repeat.Once();
+            _orgService.Stub(x => x.RetrieveMultiple(new QueryExpression())).IgnoreArguments().Return(GetEntityCollection(GetGDPREntity("bupa_gdprsettings", "2010-04-11", fetchCondition, fetchConditionToExclude, 200))).Repeat.Once();
+            _orgService.Stub(x => x.RetrieveMultiple(new QueryExpression())).IgnoreArguments().Return(GetEntityCollection(GetEntity("incident"))).Repeat.Once();
+            _orgService.Stub(x => x.RetrieveMultiple(new QueryExpression())).IgnoreArguments().Return(GetEntityCollection(GetEntity("incident"))).Repeat.Once();
+
+            _orgService.Stub(x => x.Delete(string.Empty, Guid.NewGuid())).IgnoreArguments().Throw(new Exception("Throw exception on Delete"));
+
+            _bulkDeletePlugin.Execute(_serviceProvider);
+        }
+
+
+        /// <summary>
+        /// Throw exception on Update of GDPR Setting record
+        /// </summary>
+        [TestMethod]
+        public void BulkDelete_Exception_OnUpdateOfGDPRSetting()
+        {
+            SetUpContextVariables();
+            ExpectMockedServiceProvider(_serviceProvider);
+            ExpectPluginContextVariable("10000", Guid.NewGuid().ToString(), "1", "incident");
+
+            _orgService.Stub(x => x.Retrieve(string.Empty, Guid.NewGuid(), new ColumnSet())).IgnoreArguments().Return(GetGDPREntity(EntNameInputParameter, "2010-04-11"));
+
+            EntityCollection entitiesToInclude = GetEntityCollection(GetEntity("incident"));
+            EntityCollection entitiesToExclude = GetEntityCollection(GetEntity("incident"));
+
+            _orgService.Stub(x => x.RetrieveMultiple(new QueryExpression())).IgnoreArguments().Return(entitiesToInclude).Repeat.Once();
+            _orgService.Stub(x => x.RetrieveMultiple(new QueryExpression())).IgnoreArguments().Return(entitiesToExclude).Repeat.Once();
+            _orgService.Stub(x => x.RetrieveMultiple(new QueryExpression())).IgnoreArguments().Return(GetEntityCollection(GetGDPREntity("bupa_gdprsettings", "2010-04-11", fetchCondition, fetchConditionToExclude, 200))).Repeat.Once();
+            _orgService.Stub(x => x.RetrieveMultiple(new QueryExpression())).IgnoreArguments().Return(GetEntityCollection(GetEntity("incident"))).Repeat.Once();
+            _orgService.Stub(x => x.RetrieveMultiple(new QueryExpression())).IgnoreArguments().Return(GetEntityCollection(GetEntity("incident"))).Repeat.Once();
+
+            _orgService.Stub(x => x.Update(null)).IgnoreArguments().Throw(new Exception("Throw exception on Update of GDPR Setting record"));
+
+            _bulkDeletePlugin.Execute(_serviceProvider);
+        }
+
+
+        #endregion
+
+        #region Test Setup
+
+        /// <summary>
+        /// Set Up Mock objects
+        /// </summary>
+        /// <param name="setOrgProxy"></param>
+        private void SetUpContextVariables()
+        {
+            _bulkDeletePlugin = MockRepository.GenerateMock<BulkDelete>();
+            _serviceProvider = MockRepository.GenerateStub<IServiceProvider>();            
+            _orgService = MockRepository.GenerateStub<IOrganizationService>();
+            _serviceFactory = MockRepository.GenerateStub<IOrganizationServiceFactory>();
+            _tracingService = MockRepository.GenerateStub<ITracingService>(); 
+            _context = MockRepository.GenerateStub<IPluginExecutionContext>();
+        }
+
+        /// <summary>
+        /// Set Up Mock Service Objects
+        /// </summary>
+        /// <param name="serviceProvider"></param>
+        /// <param name="crudOperationPlugin"></param>
+        private void ExpectMockedServiceProvider(IServiceProvider serviceProvider)
+        {
+            serviceProvider.Expect(s => s.GetService(typeof(ITracingService))).Return(_tracingService);
+            serviceProvider.Expect(s => s.GetService(typeof(IPluginExecutionContext))).Return(_context);
+            serviceProvider.Expect(s => s.GetService(typeof(IOrganizationServiceFactory))).Return(_serviceFactory);
+            _serviceFactory.Expect(x => x.CreateOrganizationService(Guid.Empty)).Return(_orgService);           
+
+        }
+
+        /// <summary>
+        /// Set up Plugin Context Stub
+        /// </summary>
+        /// <param name="attributes"></param>
+        private void ExpectPluginContextVariable(string deleteBatchSize, string recordId, string scheduledDays, string entName)
+        {
+            //Input Parameter Collection
+            ParameterCollection inputParam = new ParameterCollection();
+            KeyValuePair<string, object> deleteBatchSizeInput = new KeyValuePair<string, object>(DeleteBatchSizeInputParameter, deleteBatchSize);
+            KeyValuePair<string, object> recordIdInput = new KeyValuePair<string, object>(RecordIdInputParameter, recordId);
+            KeyValuePair<string, object> scheduledDaysInput = new KeyValuePair<string, object>(ScheduleDaysInputParameter, scheduledDays);
+            KeyValuePair<string, object> entNameInput = new KeyValuePair<string, object>(EntNameInputParameter, entName); 
+            inputParam.Add(deleteBatchSizeInput);
+            inputParam.Add(recordIdInput);
+            inputParam.Add(scheduledDaysInput);
+            inputParam.Add(entNameInput);
+
+            //Output Parameter Collection
+            ParameterCollection outputParam = new ParameterCollection();
+            KeyValuePair<string, object> totalDeletedRecords = new KeyValuePair<string, object>(TotalDeletedRecordsOutputParameter, 1000);
+            outputParam.Add(totalDeletedRecords);
+
+            _context.Stub(x => x.InputParameters).Return(inputParam);
+            _context.Stub(x => x.OutputParameters).Return(outputParam);               
+            _context.Stub(x => x.MessageName).Return(actionName);           
+        }
+
+        private void ExpectMock(EntityCollection entityCollection, Entity entity)
+        {
+            _orgService.Stub(x => x.Retrieve(string.Empty, Guid.NewGuid(), new ColumnSet())).IgnoreArguments().Return(entity);
+            _orgService.Stub(x => x.RetrieveMultiple(new QueryExpression())).IgnoreArguments().Return(entityCollection);
+        }
+
+
+        /// <summary>
+        /// Get Entity Collection
+        /// </summary>
+        /// <param name="entity"></param>
+        /// <returns></returns>
+        private EntityCollection GetEntityCollection(Entity entity)
+        {
+            EntityCollection coll = new EntityCollection();
+            coll.Entities.Add(entity);
+
+            return coll;
+        }
+
+
+        /// <summary>
+        /// Get GDPR setting record
+        /// </summary>
+        /// <param name="EntityName"></param>
+        /// <returns></returns>
+        private Entity GetGDPREntity(string EntityName, string endDate, string fetchToInclude = fetchCondition, string fetchToExclude = fetchConditionToExclude, int deleteBatchSize = 0)
+        {
+            return new Entity
+            {
+                LogicalName = EntityName,
+                Id = Guid.NewGuid(),
+                Attributes = new AttributeCollection
+                {
+                    new KeyValuePair<string, object>("bupa_contactcontractid", Guid.NewGuid()),
+                    new KeyValuePair<string, object>("bupa_enddate", DateTime.Parse(endDate)),
+                    new KeyValuePair<string, object>("bupa_fetchcondition", fetchToInclude),
+                    new KeyValuePair<string, object>("bupa_fetchxmlconditiontoexcludingscope", fetchToExclude),
+                    new KeyValuePair<string, object>("bupa_deletebatchsize", deleteBatchSize),
+                }
+            };
+        }
+
+        private Entity GetEntity(string EntityName)
+        {
+            return new Entity
+            {
+                LogicalName = EntityName,
+                Id = Guid.NewGuid(),
+                Attributes = new AttributeCollection
+                {
+                    //new KeyValuePair<string, object>("bupa_contactcontractid", Guid.NewGuid())                  
+                }
+            };
+        }
+
+        #endregion
+
+
+
+    }
+}
